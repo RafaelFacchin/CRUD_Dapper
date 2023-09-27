@@ -71,19 +71,32 @@ namespace eCommerce.API.Repositories
         public Usuario Get(int id)
         {
             //RETORNA 1 UNICO USUARIO, PESQUISANDO O USUARIO PELO SEU NUMERO ID
-            return _connection.Query<Usuario, Contato, Usuario>( //OBS: METODO "T" return; Aqui podemos elencar os objetos que estaro na lista IENumerable (Usuario, Contato), Mas tambem pode-se indicar em qual objeto serah feiro o return da solicitacao (no caso estara contido em um objeto Usuario)
-                "SELECT * FROM Usuarios AS U " +
+            List<Usuario> usuarios = new List<Usuario>();
+
+            //METODO QUE RETORNA TODOS OS USUARIOS ATRAVES DE UMA QUERY CONJUNTA (TABELA Usuarios + TABELA EnderecosEntrega)
+            string sql = "SELECT * FROM Usuarios AS U " +
                 "LEFT JOIN Contatos AS C ON C.UsuarioId = U.Id " +
-                "WHERE U.Id = @Id",
-                (usuario, contato) =>//FUNCAO ANONIMA DE MAPEAMENTO DOS OBJETOS
+                "LEFT JOIN EnderecosEntrega AS EE ON EE.UsuarioId = U.Id" +
+                "WHERE U.Id = @Id";
+
+            _connection.Query<Usuario, Contato, EnderecoEntrega, Usuario>(sql, (usuario, contato, enderecoEntrega) => {
+                //EVITA A DUPLICIDADE DE DADOS (Usuarioid) nesta tabela
+                if (usuarios.SingleOrDefault(a => a.Id == usuario.Id) == null) //VERIFICA SE POSSUI O MESMO Id
                 {
-                    usuario.Contato = contato;//MAPEAMENTO DA JUNCAO DOS OBJETOS Usuario e Contato P/ RETORNAR UMA QUERY 
-                    return usuario;
-                },
-                new { Id = id }
-                ).SingleOrDefault();//Sempre deve-se usar os generics (<>) para consultas (referenciam a (as) coluna(s) de pesquisas
-                                            //QuerySingleOrdefault: retorna apenas uma linha de pesquisa E jah vem com tratamento de excecoes, caso nao haja nenhuma linha dentro do banco de dados
-                                            //;QueryFirst: retornarah apenas a primeira linha
+                    usuario.EnderecosEntrega = new List<EnderecoEntrega>();//ADICIONA O USUARIO NA LISTA DE ENTREGAS
+                    usuario.Contato = contato;//ADICIONA TAMBEM O USUARIO AO CONTATO
+                    usuarios.Add(usuario);//SENAO TIVER DUPLICIDADE, Adiciona um novo usuario
+                }
+                else //SE FOR DIFERENTE DE NULO, ATRIBUI-SE
+                {
+                    usuario = usuarios.SingleOrDefault(a => a.Id == usuario.Id);
+                }
+
+                usuario.EnderecosEntrega.Add(enderecoEntrega);
+                return usuario;
+            }, new { Id = id });//MAPEAMENTO DE OBJETOS DA QUERY ACIMA
+
+            return usuarios.SingleOrDefault();
         }
 
         public void Insert(Usuario usuario)
@@ -110,6 +123,18 @@ namespace eCommerce.API.Repositories
                     usuario.Contato.UsuarioId = usuario.Id;
                     string sqlContato = "INSERT INTO Contatos(UsuarioId, Telefone, Celular) VALUES (@UsuarioId, @Telefone, @Celular)";
                     usuario.Contato.Id = _connection.Query<int>(sqlContato, usuario.Contato, transaction).Single();
+                }
+
+                //VERIFICA SE O USUARIO POSSUI ENDERECO DE ENTREGA
+                if(usuario.EnderecosEntrega != null && usuario.EnderecosEntrega.Count > 0)
+                {
+                    foreach (var enderecoEntrega in usuario.EnderecosEntrega)
+                    {
+                        enderecoEntrega.UsuarioId = usuario.Id;
+                        string sqlEndereco = "INSERT INTO EnderecosEntrega (UsuarioId, NomeEndereco, CEP, Estado, Cidade, Bairro, Endereco, Numero, Complemento) VALUES (@UsuarioId, @NomeEndereco, @CEP, @Estado, @Cidade, @Bairro, @Endereco, @Numero, @Complemento); ";
+                        enderecoEntrega.Id = _connection.Query<int>(sqlEndereco, enderecoEntrega, transaction).Single();
+
+                    }
                 }
 
                 //**FINALIZA A TRANSACTION
@@ -156,6 +181,22 @@ namespace eCommerce.API.Repositories
                     //ATUALIZACAO DE CONTATO
                     string sqlContato = "UPDATE Contatos SET UsuarioId = @UsuarioId, Telefone = @Telefone, Celular = @Celular WHERE Id = @Id";
                     _connection.Execute(sqlContato, usuario.Contato, transaction);
+                }
+
+                //DELETAR TODOS OS DADOS PARA REINSERILOS (AO INVES DE ATUALIZAR, oque pode gerar problemas de compatibilidade)
+                string sqlDeletarEnderecosEntrega = "DELETE FROM EnderecosEntrega WHERE UsuarioId = @Id";
+                _connection.Execute(sqlDeletarEnderecosEntrega, usuario, transaction);
+
+                //ADICIONAR NOVAMENTE OS DADOS
+                if (usuario.EnderecosEntrega != null && usuario.EnderecosEntrega.Count > 0)
+                {
+                    foreach (var enderecoEntrega in usuario.EnderecosEntrega)
+                    {
+                        enderecoEntrega.UsuarioId = usuario.Id;
+                        string sqlEndereco = "INSERT INTO EnderecosEntrega (UsuarioId, NomeEndereco, CEP, Estado, Cidade, Bairro, Endereco, Numero, Complemento) VALUES (@UsuarioId, @NomeEndereco, @CEP, @Estado, @Cidade, @Bairro, @Endereco, @Numero, @Complemento); ";
+                        enderecoEntrega.Id = _connection.Query<int>(sqlEndereco, enderecoEntrega, transaction).Single();
+
+                    }
                 }
 
                 //**FINALIZA A TRANSACTION
