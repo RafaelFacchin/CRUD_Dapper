@@ -40,17 +40,18 @@ namespace eCommerce.API.Repositories
 
             //LISTA VAZIA PARA RETORNAR OS DADOS DOA QUARY ABAIXO
             List<Usuario> usuarios = new List<Usuario>();
-            
+
             //METODO QUE RETORNA TODOS OS USUARIOS ATRAVES DE UMA QUERY CONJUNTA (TABELA Usuarios + TABELA EnderecosEntrega)
             string sql = "SELECT * FROM Usuarios AS U " +
                 "LEFT JOIN Contatos AS C ON C.UsuarioId = U.Id " +
                 "LEFT JOIN EnderecosEntrega AS EE ON EE.UsuarioId = U.Id" +
-                "WHERE U.Id = @Id";
+                "LEFT JOIN UsuariosDepartamentos UD ON UD.UsuarioId = U.Id";
 
-            _connection.Query<Usuario, Contato, EnderecoEntrega, Usuario>(sql, (usuario,contato, enderecoEntrega) => {
+            _connection.Query<Usuario, Contato, EnderecoEntrega, Departamento, Usuario>(sql, (usuario,contato, enderecoEntrega, departamento) => {
                 //EVITA A DUPLICIDADE DE DADOS (Usuarioid) nesta tabela
                 if (usuarios.SingleOrDefault(a => a.Id == usuario.Id) == null) //VERIFICA SE POSSUI O MESMO Id
                 {
+                    usuario.Departamentos = new List<Departamento>();//ADICIONA O USUARIO NA LISTA DE DEPARTAMENTOS
                     usuario.EnderecosEntrega = new List<EnderecoEntrega>();//ADICIONA O USUARIO NA LISTA DE ENTREGAS
                     usuario.Contato = contato;//ADICIONA TAMBEM O USUARIO AO CONTATO
                     usuarios.Add(usuario);//SENAO TIVER DUPLICIDADE, Adiciona um novo usuario
@@ -60,7 +61,18 @@ namespace eCommerce.API.Repositories
                     usuario = usuarios.SingleOrDefault(a => a.Id == usuario.Id);
                 }
 
-                usuario.EnderecosEntrega.Add(enderecoEntrega);
+                //VERIFICAR SE O ENDERECO JAH EXISTE NO BD
+                if (usuario.EnderecosEntrega.SingleOrDefault(a => a.Id == enderecoEntrega.Id) == null)
+                {
+                    usuario.EnderecosEntrega.Add(enderecoEntrega);
+                }
+
+                //VERIFICACAO DO DEPARTAMENTO (de compra)
+                if (usuario.Departamentos.SingleOrDefault(a => a.Id == departamento.Id) == null)
+                {
+                    usuario.Departamentos.Add(departamento);
+                }
+
                 return usuario;
             });//MAPEAMENTO DE OBJETOS DA QUERY ACIMA
 
