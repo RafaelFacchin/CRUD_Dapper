@@ -35,17 +35,18 @@ namespace eCommerce.API.Repositories
         
         public List<Usuario> Get()
         {
-            //METODO QUE RETORNA TODOS OS USUARIOS ATRAVES DE UMA QUERY SIMPLES(*)
+            //METODO QUE RETORNA TODOS OS USUARIOS ATRAVES DE UMA QUERY
             //return _connection.Query<Usuario>("SELECT * FROM Usuarios").ToList(); //Retorna uma consulta (IEnumerable) e a converte para uma lista (ToList())
 
             //LISTA VAZIA PARA RETORNAR OS DADOS DOA QUARY ABAIXO
             List<Usuario> usuarios = new List<Usuario>();
 
-            //METODO QUE RETORNA TODOS OS USUARIOS ATRAVES DE UMA QUERY CONJUNTA (TABELA Usuarios + TABELA EnderecosEntrega)
-            string sql = "SELECT * FROM Usuarios AS U " +
+            //METODO QUE RETORNA TODOS OS USUARIOS E COLUNAS ATRAVES DE UMA QUERY CONJUNTA (TABELA Usuarios + TABELA EnderecosEntrega)
+            string sql = "SELECT U.*, C.*, EE.*, D.* FROM Usuarios AS U " +
                 "LEFT JOIN Contatos AS C ON C.UsuarioId = U.Id " +
                 "LEFT JOIN EnderecosEntrega AS EE ON EE.UsuarioId = U.Id" +
-                "LEFT JOIN UsuariosDepartamentos UD ON UD.UsuarioId = U.Id";
+                "LEFT JOIN UsuariosDepartamentos AS UD ON UD.UsuarioId = U.Id" +
+                "LEFT JOIN Departamentos AS D ON UD.Departamentos = U.Id";
 
             _connection.Query<Usuario, Contato, EnderecoEntrega, Departamento, Usuario>(sql, (usuario,contato, enderecoEntrega, departamento) => {
                 //EVITA A DUPLICIDADE DE DADOS (Usuarioid) nesta tabela
@@ -61,7 +62,7 @@ namespace eCommerce.API.Repositories
                     usuario = usuarios.SingleOrDefault(a => a.Id == usuario.Id);
                 }
 
-                //VERIFICAR SE O ENDERECO JAH EXISTE NO BD
+                //VERIFICACAO DO ENDERECO DE ENTREGA
                 if (usuario.EnderecosEntrega.SingleOrDefault(a => a.Id == enderecoEntrega.Id) == null)
                 {
                     usuario.EnderecosEntrega.Add(enderecoEntrega);
@@ -82,19 +83,23 @@ namespace eCommerce.API.Repositories
 
         public Usuario Get(int id)
         {
-            //RETORNA 1 UNICO USUARIO, PESQUISANDO O USUARIO PELO SEU NUMERO ID
+            //!!METODO QUE RETORNA APENAS O USUARIO SELECIONADO ATRAVES DE UMA QUERY
+
+            //LISTA VAZIA PARA RETORNAR OS DADOS DOA QUARY ABAIXO
             List<Usuario> usuarios = new List<Usuario>();
 
-            //METODO QUE RETORNA TODOS OS USUARIOS ATRAVES DE UMA QUERY CONJUNTA (TABELA Usuarios + TABELA EnderecosEntrega)
-            string sql = "SELECT * FROM Usuarios AS U " +
+            //METODO QUE RETORNA TODOS OS USUARIOS E COLUNAS ATRAVES DE UMA QUERY CONJUNTA (TABELA Usuarios + TABELA EnderecosEntrega)
+            string sql = "SELECT U.*, C.*, EE.*, D.* FROM Usuarios AS U " +
                 "LEFT JOIN Contatos AS C ON C.UsuarioId = U.Id " +
                 "LEFT JOIN EnderecosEntrega AS EE ON EE.UsuarioId = U.Id" +
-                "WHERE U.Id = @Id";
+                "LEFT JOIN UsuariosDepartamentos AS UD ON UD.UsuarioId = U.Id" +
+                "LEFT JOIN Departamentos AS D ON UD.Departamentos = U.Id WHERE U.Id = @Id";
 
-            _connection.Query<Usuario, Contato, EnderecoEntrega, Usuario>(sql, (usuario, contato, enderecoEntrega) => {
+            _connection.Query<Usuario, Contato, EnderecoEntrega, Departamento, Usuario>(sql, (usuario, contato, enderecoEntrega, departamento) => {
                 //EVITA A DUPLICIDADE DE DADOS (Usuarioid) nesta tabela
                 if (usuarios.SingleOrDefault(a => a.Id == usuario.Id) == null) //VERIFICA SE POSSUI O MESMO Id
                 {
+                    usuario.Departamentos = new List<Departamento>();//ADICIONA O USUARIO NA LISTA DE DEPARTAMENTOS
                     usuario.EnderecosEntrega = new List<EnderecoEntrega>();//ADICIONA O USUARIO NA LISTA DE ENTREGAS
                     usuario.Contato = contato;//ADICIONA TAMBEM O USUARIO AO CONTATO
                     usuarios.Add(usuario);//SENAO TIVER DUPLICIDADE, Adiciona um novo usuario
@@ -104,11 +109,22 @@ namespace eCommerce.API.Repositories
                     usuario = usuarios.SingleOrDefault(a => a.Id == usuario.Id);
                 }
 
-                usuario.EnderecosEntrega.Add(enderecoEntrega);
-                return usuario;
-            }, new { Id = id });//MAPEAMENTO DE OBJETOS DA QUERY ACIMA
+                //VERIFICACAO DO ENDERECO DE ENTREGA
+                if (usuario.EnderecosEntrega.SingleOrDefault(a => a.Id == enderecoEntrega.Id) == null)
+                {
+                    usuario.EnderecosEntrega.Add(enderecoEntrega);
+                }
 
-            return usuarios.SingleOrDefault();
+                //VERIFICACAO DO DEPARTAMENTO (de compra)
+                if (usuario.Departamentos.SingleOrDefault(a => a.Id == departamento.Id) == null)
+                {
+                    usuario.Departamentos.Add(departamento);
+                }
+
+                return usuario;
+            }, new { Id = id});//MAPEAMENTO DE OBJETOS DA QUERY ACIMA
+
+            return usuarios.SingleOrDefault();//RETORN APENAS UM "OBJETO(Usuario)" JAH TRATADO, isto eh, sem duplicidades
         }
 
         public void Insert(Usuario usuario)
@@ -143,9 +159,20 @@ namespace eCommerce.API.Repositories
                     foreach (var enderecoEntrega in usuario.EnderecosEntrega)
                     {
                         enderecoEntrega.UsuarioId = usuario.Id;
-                        string sqlEndereco = "INSERT INTO EnderecosEntrega (UsuarioId, NomeEndereco, CEP, Estado, Cidade, Bairro, Endereco, Numero, Complemento) VALUES (@UsuarioId, @NomeEndereco, @CEP, @Estado, @Cidade, @Bairro, @Endereco, @Numero, @Complemento); ";
+                        string sqlEndereco = "INSERT INTO EnderecosEntrega (UsuarioId, NomeEndereco, CEP, Estado, Cidade, Bairro, Endereco, Numero, Complemento) VALUES (@UsuarioId, @NomeEndereco, @CEP, @Estado, @Cidade, @Bairro, @Endereco, @Numero, @Complemento); SELECT CAST(SCOPE_IDENTITY() AS INT); ";
                         enderecoEntrega.Id = _connection.Query<int>(sqlEndereco, enderecoEntrega, transaction).Single();
 
+                    }
+                }
+
+                //DEFINICAO DE VINCULOS DE PESQUISA NO BD
+                if (usuario.Departamentos != null && usuario.Departamentos.Count > 0)
+                {
+                    foreach (var departamento in usuario.Departamentos)
+                    {
+
+                        string sqlUsuariosDepartamentos = "INSERT INTO UsuariosDepartamentos (UsuarioId, DepartamentoId) VALUES (@UsuarioId, @DepartamentoId);";
+                        _connection.Execute(sqlUsuariosDepartamentos, new { UsuarioId = usuario.Id, DepartamentoId = departamento.Id}, transaction);
                     }
                 }
 
