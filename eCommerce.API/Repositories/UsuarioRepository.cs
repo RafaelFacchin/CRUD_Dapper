@@ -222,7 +222,7 @@ namespace eCommerce.API.Repositories
                     _connection.Execute(sqlContato, usuario.Contato, transaction);
                 }
 
-                //DELETAR TODOS OS DADOS PARA REINSERILOS (AO INVES DE ATUALIZAR, oque pode gerar problemas de compatibilidade)
+                //DELETAR TODOS OS DADOS DE "ENDERECO DE ENTREGA" PARA REINSERILOS (AO INVES DE ATUALIZAR, oque pode gerar problemas de compatibilidade)
                 string sqlDeletarEnderecosEntrega = "DELETE FROM EnderecosEntrega WHERE UsuarioId = @Id";
                 _connection.Execute(sqlDeletarEnderecosEntrega, usuario, transaction);
 
@@ -235,6 +235,21 @@ namespace eCommerce.API.Repositories
                         string sqlEndereco = "INSERT INTO EnderecosEntrega (UsuarioId, NomeEndereco, CEP, Estado, Cidade, Bairro, Endereco, Numero, Complemento) VALUES (@UsuarioId, @NomeEndereco, @CEP, @Estado, @Cidade, @Bairro, @Endereco, @Numero, @Complemento); ";
                         enderecoEntrega.Id = _connection.Query<int>(sqlEndereco, enderecoEntrega, transaction).Single();
 
+                    }
+                }
+
+                //DELETAR TODOS OS DADOS DE "DEPARTAMENTOS" PARA REINSERILOS (AO INVES DE ATUALIZAR, oque pode gerar problemas de compatibilidade)
+                string sqlDeletarUsuariosDepartamentos = "DELETE FROM Usuariosdepartamentos WHERE UsuarioId = @Id";
+                _connection.Execute(sqlDeletarUsuariosDepartamentos, usuario, transaction);
+
+                //ADICIONAR NOVAMENTE OS DADOS
+                if (usuario.Departamentos != null && usuario.Departamentos.Count > 0)
+                {
+                    foreach (var departamento in usuario.Departamentos)
+                    {
+
+                        string sqlUsuariosDepartamentos = "INSERT INTO UsuariosDepartamentos (UsuarioId, DepartamentoId) VALUES (@UsuarioId, @DepartamentoId);";
+                        _connection.Execute(sqlUsuariosDepartamentos, new { UsuarioId = usuario.Id, DepartamentoId = departamento.Id }, transaction);
                     }
                 }
 

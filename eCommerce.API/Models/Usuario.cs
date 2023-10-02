@@ -1,7 +1,19 @@
-﻿namespace eCommerce.API.Models
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Dapper.Contrib.Extensions;
+
+namespace eCommerce.API.Models
 {
+    //!!!!INDICACAO DA TABELA DE DADOS P/ PODER INFORMAR O OBJETO(tabela) AO DAPPER.CONTRIB!!!!
+    [Table("Usuarios")]//Data Anotation: Informa a TABELA (ORM) PARA FUNCIONAMENTO DO Dapper.Contrib
+
     public class Usuario
     {
+        [Key]//data anotation p/ informar a CHAVE PRIMARIA(PK) DA TABELA
+        
+        
         //**ATRIBUTOS E GETTERS E SETTERS
         public int Id { get; set; }
         public string Nome { get; set; }
