@@ -28,11 +28,14 @@ namespace eCommerce.API.Models
         //DEIFINICAO DE RELACIONAMENTOS ENTRE AS TABELAS
         //Tabela usuario (classe usuario) com tabela Contato (classe Contato), Enderecos de entrega       
         //!!Composicao de um relacionamento entre tabelas e classes
+        
+        [Write(false)]//O DAPPER considera que apos este DATA ANOTTATION nao considera estes campos (abaixo)
         public Contato Contato { get; set; }//Relacionamento 1:1; Toda vez que a classe usuario for instanciada, trarah tb a classe Contato
 
-
+        [Write(false)]
         public ICollection<EnderecoEntrega> EnderecosEntrega { get; set; }//Relacionamento 1:M (um usuario pode ter mais de um endereco de entrega); Toda vez que a classe usuario for instanciada, trarah tb a classe EnderecoEntrega                                                                          //TIP: o ICollection, retorna uma LISTA com os enderecos de entrega do usuario
 
+        [Write(false)]
         public ICollection<Departamento> Departamentos { get; set; }//Relacionamento M:M (um usuario pode comprar em VARIOS DEPARTAMENTOS, assim como VARIOS departamentos vendem para VARIOS Usuarios); Toda vez que a classe usuario for instanciada, trarah tb a classe Departamento
                                                                           //TIP: o ICollection, retorna uma LISTA com os nomes dos DEPARTAMENTOS
 
